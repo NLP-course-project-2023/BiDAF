@@ -18,10 +18,7 @@ We performed different data processing steps, that can be summarized as:
 1. *Text pre-processing* (lowercasing, special char removal, ...)
 2. *Tokenization and feature extraction* (lemmas, POS tags, and ENT extraction, vocabulary, ...)  
 
-The implementation of the *Data Preparation* pipeline is available in the directory:
-```
-src/data_preparation
-```
+The implementation of the *Data Preparation* pipeline is available in the directory ```src/data_preparation```
 
 ### MODEL
 In this section, we present the question-answering model implemented for the SQuAD 2.0 dataset. We considered the *Bi-Directional Attention Flow (BIDAF) model* as our baseline.
@@ -30,10 +27,7 @@ Then we introduced various enhancements to capture finer-grained linguistic info
 - Information extraction from *part-of-speech and entity recognition embeddings* [[Chen et al., 2017]](https://aclanthology.org/P17-1171.pdf),
 - *Iterative Re-Attention* mechanism [[Hu et al., 2018]](https://arxiv.org/pdf/1705.02798.pdf)
 
-The implementation of the different model architectures and associated tools is available in the directory:
-```
-src/model
-```
+The implementation of the different model architectures and associated tools is available in the directory ```src/model```.
 
 ### RESULTS
 
