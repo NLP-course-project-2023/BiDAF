@@ -1,4 +1,4 @@
-# BiDAF: Bi-Directional Attention Flow network for SQuAD 2.0 question-answering
+# BiDAF: Bi-Directional Attention Flow network for SQuAD 2.0
 In this repo we present a PyTorch implementation of the *Bidirectional Attention Flow network* described in [[Minjoon Seo et al., Bidirectional Attention Flow for Machine Comprehension]](https://arxiv.org/abs/1611.01603).
 
 For further information and a more detailed explanation of the data pre-processing, model design, and results, please refer to the relative sections in the "summary" notebook *SQUAD_main.ipynb*. 
