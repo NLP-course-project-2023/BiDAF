@@ -9,7 +9,7 @@ from spacy import glossary
 from tqdm import tqdm
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset, DataLoader
-from typing import Optional, Iterable, List
+from typing import Optional, Iterable, List, Tuple, Dict
 from misc.utils import pad_characters, GloVe_embedding_matrix, pad_pos_indexes
 
 
@@ -261,17 +261,20 @@ class Vocabulary:
     
     def reduce_word_vocabulary(
             self, 
+            max_size: int,
             freq_threshold: int, 
-            max_size: int
     ) -> None:
         """
         Reduce the current size of the Vocabulary to `max_size`, removing less frequent words.
         
         Parameters:
         -----------
-        freq_threshold: (int) 
-            
         max_size: (int)
+            If vocabulary size is greater than this value, the vocabulary is reduced to `max_size` 
+            removing words with lower frequency.
+
+        freq_threshold: (int) 
+            All the words whose frequency is below this threshold are remove from the vocabulary.
         """
         # check that frequencies dictionary is properly loaded
         if not self.word_frequencies:
@@ -284,7 +287,19 @@ class Vocabulary:
         self.word_frequencies = dict(sorted(self.word_frequencies.items(), key=lambda x: -x[1])[:(max_size-len(self.special_tokens))])
 
 
-    def get_GloVe_indexes(self, GloVe_file_path):
+    def get_GloVe_indexes(
+            self, 
+            GloVe_file_path: str
+    ) -> None:
+        """
+        Load GloVe embeddings file, filter words that are present in our vocabulary, and create a map between such words
+        and the row index in the GloVe file.
+
+        Parameters:
+        -----------
+        GloVe_file_path: (str)
+            Path to the location in which the file containing the GloVe embeddings is stored. 
+        """
         # check that frequencies dictionary is properly loaded
         if not self.word_frequencies:
             raise ValueError("You first need to build a word vocabulary or load it from file!")
@@ -310,7 +325,31 @@ class Vocabulary:
         self.idx_to_word = {idx: word for word, idx in enumerate(self.word_to_idx)}
     
 
-    def word_numericalize(self, word_list, add_SOS=False, add_EOS=False):
+    def word_numericalize(
+            self, 
+            word_list: List[str], 
+            add_SOS: Optional[bool] = False, 
+            add_EOS: Optional[bool] = False
+    ) -> List[int]:
+        """
+        Map words/tokens to the index associated to their GloVe embedding.
+
+        Paramters:
+        ----------
+        word_list: (List[str])
+            A list of words/tokens.
+        
+        add_SOS: (Optional[bool] = False) 
+            If `True`, the token <SOS> is appended at the start of the sentence.
+
+        add_EOS: (Optional[bool] = False)
+            If `True`, the token <EOS> is appended at the end of the sentence.
+
+        Returns:
+        --------
+        numericalized_text: (List[int])
+            A list of indexes associated to the embedding vectors
+        """
         numericalized_text = []
         
         if add_SOS:
@@ -328,7 +367,31 @@ class Vocabulary:
         return numericalized_text
     
 
-    def char_numericalize(self, word_list, add_SOS=False, add_EOS=False):
+    def char_numericalize(
+            self, 
+            word_list: List[str], 
+            add_SOS: Optional[bool] = False, 
+            add_EOS: Optional[bool] = False
+    ) -> List[int]:
+        """
+        Map single characters to indexes.
+
+        Paramters:
+        ----------
+        word_list: (List[str])
+            A list of words/tokens.
+        
+        add_SOS: (Optional[bool] = False) 
+            If `True`, the token <SOS> is appended at the start of the sentence.
+
+        add_EOS: (Optional[bool] = False)
+            If `True`, the token <EOS> is appended at the end of the sentence.
+
+        Returns:
+        --------
+        numericalized_text: (List[int])
+            A list of indexes correspondent to the input characters.
+        """
         numericalized_text = []
         
         if add_SOS:
@@ -353,17 +416,33 @@ class Vocabulary:
 
 #------------------------------------------------------------------------------------------------------------------------------------------
 class Train_Dataset(Dataset):
-    '''
-    Initiating Variables
-    df: the training dataframe
-    vocabulary: a Vocabulary object associated to the dataset
-    transform : If we want to add any augmentation
-    '''
-    
-    def __init__(self, df, vocab_freq_threshold, vocab_max_size, special_tokens=None, vocabulary=None,transform=None, glove_file=r"..\glove.6B\glove.6B.50d.txt"):
+    """
+    Parameters:
+    -----------
+    df: (pd.Dataframe)
+        The training dataframe
+    vocab_freq_threshold: (int)
+        All the words whose frequency is below this threshold are remove from the vocabulary.
+    vocab_max_size: (int)
+        If vocabulary size is greater than this value, the vocabulary is reduced to `vocab_max_size` removing words with lower frequency.
+    special_tokens: (Iterable[str] = None)
+        A collection of special tokens to include in the vocabulary.
+    vocabulary: (Optional[Vocabulary] = None) 
+        A Vocabulary object created for this dataset
+    glove_file: Optional[str] = r"..\glove.6B\glove.6B.50d.txt"
+        The path to the GloVe embeddings file.
+    """
+    def __init__(
+            self, 
+            df: pd.Dataframe, 
+            vocab_freq_threshold: int, 
+            vocab_max_size: int, 
+            special_tokens: Iterable[str] = None, 
+            vocabulary: Optional[Vocabulary] = None,
+            glove_file: Optional[str] = r"..\glove.6B\glove.6B.50d.txt"
+    ):
     
         self.df = df
-        self.transform = transform
         
         #extract useful data from the dataframe
         self.impossibles = self.df["impossible"]
@@ -413,14 +492,43 @@ class Train_Dataset(Dataset):
         return len(self.df)
     
 
-    def get_POS_embeddings(self, numericalized_text, pos_idxs_dict, pos_vals):
+    def get_POS_embeddings(
+            self, 
+            numericalized_text: Iterable[int], 
+            pos_idxs_dict: Dict[str, List[int]], 
+            pos_vals: List[str]
+    ) -> Tuple[torch.Tensor[float], List[int]]:
+        """
+        Compute embedding vectors for the POS tags. Those embedding are computed as the average of the 
+        embedding vectors of all the words that are associated to a certain POS tag. 
+        
+        Parameters:
+        -----------
+        numericalized_text: (Iterable[int])
+            A list of indexes associated to the tokens in the text.
+
+        pos_idxs_dict: (Dict[str, List[int]])
+            A dictionary whose keys are the POS tags present in the text and values are lists of
+            positions in which they are present in the text
+
+        pos_vals: (List[str])
+            The list on unique POS tags values present in the text.
+
+        Returns:
+        --------
+        embedding_matrix: (torch.Tensor[float])
+            A matrix whose rows are the embedding vector associated to the POS tags.
+
+        numericalized_tags: (List[int])
+            A list on indexes which POS tags are mapped to.
+        """
+
         temp_embedding_matrix = torch.empty((len(self.tag_to_idx.keys())+2, self.glove_matrix.shape[1]))
         numericalized_tags = []
         i = 2 # ['<PAD>','<OOV>', '<SOS>'] not oov here
         temp_embedding_matrix[0, :] = torch.randn_like(self.glove_matrix[0, :]) # pad
         temp_embedding_matrix[1, :] = torch.randn_like(self.glove_matrix[1, :]) # oov
         temp_embedding_matrix[2, :] = torch.randn_like(self.glove_matrix[3, :]) # sos
-        
         
         embedding_matrix = torch.empty((len(pos_vals)+1, self.glove_matrix.shape[1]))
         
@@ -452,10 +560,6 @@ class Train_Dataset(Dataset):
         question_pos = self.question_pos[index]
         context_ent_idxs = self.context_ent_idxs[index]
         question_ent_idxs = self.question_ent_idxs[index]
-        
-        if self.transform is not None:
-            context_text = self.transform(context_text)
-            question_text = self.transform(question_text)
             
         #map context and question tokens to indexes
         numericalized_context = self.vocabulary.word_numericalize(context_text, add_SOS=True)
@@ -507,10 +611,23 @@ class Train_Dataset(Dataset):
 #--------------------------------------------------------------------------------------------------------------------------------------------
 class Validation_Dataset:
     """
-    We use as vocabulary the one from the training dataset
-    """
-    def __init__(self, df, vocabulary, glove_file):
+    Parameters:     
+    -----------
+    df: (pd.Dataframe)
+        The training dataframe
+    vocabulary: (Optional[Vocabulary] = None) 
+        A Vocabulary object created for this dataset
+    glove_file: Optional[str] = r"..\glove.6B\glove.6B.50d.txt"
+        The path to the GloVe embeddings file.
     
+    NOTE: in the implementation we use the same vocabulary used for the training dataset
+    """
+    def __init__(
+            self, 
+            df: pd.DataFrame, 
+            vocabulary: Vocabulary, 
+            glove_file: str
+    ):
         self.df = df
         self.vocabulary = vocabulary
         
@@ -540,14 +657,43 @@ class Validation_Dataset:
     def __len__(self):
         return len(self.df)
     
-    def get_POS_embeddings(self, numericalized_text, pos_idxs_dict, pos_vals):
+    def get_POS_embeddings(
+            self, 
+            numericalized_text: Iterable[int], 
+            pos_idxs_dict: Dict[str, List[int]], 
+            pos_vals: List[str]
+    ) -> Tuple[torch.Tensor[float], List[int]]:
+        """
+        Compute embedding vectors for the POS tags. Those embedding are computed as the average of the 
+        embedding vectors of all the words that are associated to a certain POS tag. 
+        
+        Parameters:
+        -----------
+        numericalized_text: (Iterable[int])
+            A list of indexes associated to the tokens in the text.
+
+        pos_idxs_dict: (Dict[str, List[int]])
+            A dictionary whose keys are the POS tags present in the text and values are lists of
+            positions in which they are present in the text
+
+        pos_vals: (List[str])
+            The list on unique POS tags values present in the text.
+
+        Returns:
+        --------
+        embedding_matrix: (torch.Tensor[float])
+            A matrix whose rows are the embedding vector associated to the POS tags.
+
+        numericalized_tags: (List[int])
+            A list on indexes which POS tags are mapped to.
+        """
+
         temp_embedding_matrix = torch.empty((len(self.tag_to_idx.keys())+2, self.glove_matrix.shape[1]))
         numericalized_tags = []
         i = 2 # ['<PAD>','<OOV>', '<SOS>'] not oov here
         temp_embedding_matrix[0, :] = torch.randn_like(self.glove_matrix[0, :]) # pad
         temp_embedding_matrix[1, :] = torch.randn_like(self.glove_matrix[1, :]) # oov
         temp_embedding_matrix[2, :] = torch.randn_like(self.glove_matrix[3, :]) # sos
-        
         
         embedding_matrix = torch.empty((len(pos_vals)+1, self.glove_matrix.shape[1]))
         
@@ -564,7 +710,6 @@ class Validation_Dataset:
         
         return embedding_matrix, numericalized_tags
         
-
 
     def __getitem__(self,index):
         #extract the items at the current index
@@ -630,7 +775,15 @@ class Validation_Dataset:
 
 #--------------------------------------------------------------------------------------------------------------------------------------------
 class MyCollate:
-    def __init__(self, word_pad_idx, char_pad_idx):
+    """
+    Class that provides methods to collate instances of the previously defined Datasets into batches,
+    specifically applying padding to allow storing data in tensors.
+    """
+    def __init__(
+            self, 
+            word_pad_idx: int, 
+            char_pad_idx: int
+    ):
         self.word_pad_idx = word_pad_idx
         self.char_pad_idx = char_pad_idx    
         
@@ -697,7 +850,13 @@ class MyCollate:
 
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------
-def get_train_loader(dataset, batch_size, num_workers=0, shuffle=True, pin_memory=True):
+def get_train_loader(
+        dataset: Dataset, 
+        batch_size: int, 
+        num_workers: Optional[int] = 0, 
+        shuffle: Optional[bool] = True, 
+        pin_memory: Optional[bool] = True
+):
     word_pad_idx = dataset.vocabulary.word_to_idx['<PAD>']
     char_pad_idx = dataset.vocabulary.char_to_idx['<PAD>']
     loader = DataLoader(dataset, 
@@ -712,7 +871,13 @@ def get_train_loader(dataset, batch_size, num_workers=0, shuffle=True, pin_memor
 
 
 #----------------------------------------------------------------------------------------------------------------------------------------------------
-def get_valid_loader(dataset, batch_size, num_workers=0, shuffle=True, pin_memory=True):
+def get_valid_loader(        
+        dataset: Dataset, 
+        batch_size: int, 
+        num_workers: Optional[int] = 0, 
+        shuffle: Optional[bool] = True, 
+        pin_memory: Optional[bool] = True
+):
     word_pad_idx = dataset.vocabulary.word_to_idx['<PAD>']
     char_pad_idx = dataset.vocabulary.char_to_idx['<PAD>']
     loader = DataLoader(dataset, 
