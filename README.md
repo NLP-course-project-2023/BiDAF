@@ -14,7 +14,7 @@ The data is available [here](https://rajpurkar.github.io/SQuAD-explorer/).
 ### DATA PREPARATION
 We performed different data processing steps, that can be summarized as:
 1. *Text pre-processing* (lowercasing, special char removal, ...)
-2. *Tokenization and feature extraction* (lemmas, POS tags and ENT)
+2. *Tokenization and feature extraction* (lemmas, POS tags, and ENT extraction, vocabulary, ...)
 
 For further information about data preparation please have a look at the detailed description in *SQUAD_main.ipynb*.  
 
@@ -24,8 +24,15 @@ src/data_preparation
 ```
 
 ### MODEL
+In this section, we present the question-answering model implemented for the SQuAD 2.0 dataset. We considered the *Bi-Directional Attention Flow (BIDAF) model* as our baseline.
+<img src="https://github.com/NLP-course-project-2023/BiDAF/blob/main/images/Screenshot%202023-08-12%20163853.png">
+Then we introduced various enhancements to capture finer-grained linguistic information, improve contextual understanding, and, hence, generate more accurate answers. These improvements include:
+- information extraction from *token features embeddings* (part-of-speech tags and entity recognition), and an 
+- *Iterative Re-Attention* mechanism
 
 ### RESULTS
+
+
 
 ### ADDITIONAL
 #### Requirements
