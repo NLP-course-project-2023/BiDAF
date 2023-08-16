@@ -1,30 +1,56 @@
+"""
+For what concerns text preprocessing we first `lowercased` all the words in the dataset.
+We also decided to remove `special characters` (i.e., punctuation, emoji, ...) and `extra spaces` from contexts and questions.
+However, given the task of retrieving answer from the context, we decided not to remove `stop words` and `digits`.
+Indeed they can be part of the answer and they can also provide to the model useful insights, especially for what regards the questions (e.g., why, where, who, ...).
+An important note is that while processing the text we kept track of the indexes of all the characters in the original context
+in order to be able to recontruct the predicted answer from the start and end indexes provided as model outputs.
+
+To this aim we implemented custom preprocessing functions for each each preprocessing step. The functioning of such functions is resumed in the following example:
+```
+          context = Hi. World
+remaining_context = [123456789]
+```
+If the preprocessing step removes '.' from the context we also remove the index 3 from the remaining_context obtaining
+```
+          context = Hi World
+remaining_context = [12456789]
+```
+
+Following the work by Chen et al. https://aclanthology.org/P17-1171.pdf, we used the `en_core_web_sm` pre-trained English language model from SpaCy to perform tokenization and to enrich the dataset with additional linguistic features from text. In particular, for each token, we decided to extract the following:
+- Lemma
+- Part-of-speech (`POS`) tag
+- Named entity (`ENT`) tag <br>
+
+The choice of using lemmas instead of simple tokens is to have a better correspondence with the words in the pre-trained embeddings of GloVe. Moreover, the rationale behind combining them to additional linguistic features is to enhance the model performances in terms of text comprehension, providing extra information about phrashes structure and syntax.
+
+Finally, we store the original context, questions and answers, the associated lemmas, `POS` and `ENT` tags, the start and end points of answer in the context, the position of each lemma in the original context, and many other auxiliary features in separated dataframes for training, validation and test.
+        
+"""
 import ast
 import json
 import math
-import os
-import pickle
-import random
 import re
 import string
 
-import matplotlib.pyplot as plt
-import nltk
-import numpy as np
 import pandas as pd
-import seaborn as sns
 import spacy
-import torch
-import torch.nn as nn
-import torch.optim as optim
-import torch.optim.lr_scheduler as sched
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
 from spacy.lang.en import English
-from torch.utils.data import Dataset
 from tqdm.notebook import tqdm
 
+nlp = English()
+
+class DataLocations:
+    """Utiliy class to save location of the initial and final data"""
+    def __init__(self, init, mid, final, is_test, use_full_spacy_pipe):
+        self.init = init
+        self.mid = mid
+        self.final = final
+        self.is_test = is_test
+        self.use_full_spacy_pipe = use_full_spacy_pipe
 
 class Colour:
+   """Colors used to print in the terminal"""
    PURPLE = '\033[95m'
    CYAN = '\033[96m'
    DARKCYAN = '\033[36m'
@@ -37,7 +63,7 @@ class Colour:
    END = '\033[0m'
 
 class NLP_preprocessing:
-
+    """Contains functions to preprocess the dataset"""
     dtypes = {
         'question': 'str',
         'lemmas': 'object',
@@ -104,8 +130,9 @@ class NLP_preprocessing:
             del rchars[index]
         return new_edit_column,rchars
 
-    # The loweing function changes the string lenght in some cases eg. İ->i̇ so we keep the lenght the same
     def lower_same_size(self,edit_column):
+        r"""The loweing function changes the string lenght in some cases eg. İ->i̇ so we keep the lenght the same.
+        i̇ occupies more than one space in this example"""
         new_edit_column = ""
         for i, c in enumerate(edit_column):
             new_edit_column += c.lower()[0]
@@ -123,9 +150,12 @@ class NLP_preprocessing:
                 right = mid - 1
         return closest,left
 
-    # Finds the token that matches the start position in the original context,
-    # if the start is not the first char of a word returns -2
+
     def find_start_token(self,original_start,starts):
+        r"""
+        Finds the token that matches the start position in the original context,
+        - if the start is not the first char of a word returns -2
+        """
         if math.isnan(original_start):
             return float('nan')
         else:
@@ -135,10 +165,13 @@ class NLP_preprocessing:
         except Exception as e:
             return -2 
 
-    # Finds the token that matches the end position in the original context,
-    # if the end is the last char of a word or inside the word returns the word
-    # if the end is on a space it will return the previous word
+
     def find_end_token(self,original_end,ends,answer):
+        r"""
+        Finds the token that matches the end position in the original context,
+        - if the end is the last char of a word or inside the word returns the word
+        - if the end is on a space it will return the previous word       
+        """
         if math.isnan(original_end):
             return float('nan')
         else:
@@ -214,15 +247,6 @@ class NLP_preprocessing:
 
         return data
 
-    # ## 2. Tokenization and feature extraction
-    # Then, following the work by Chen et al. [https://aclanthology.org/P17-1171.pdf], we used the **`en_core_web_sm`** pre-trained English language model from SpaCy to perform tokenization and to enrich the dataset with additional linguistic features from text. In particular, for each token, we decided to extract the following:
-    # - **Lemma**
-    # - *Part-of-speech* (**POS**) tag
-    # - *Named entity* (**ENT**) tag <br>
-
-    # The choice of using lemmas instead of simple tokens is to have a better correspondence with the words in the pre-trained embeddings of GloVe. Moreover, the rationale behind combining them to additional linguistic features is to enhance the model performances in terms of text comprehension, providing extra information about phrashes structure and syntax.
-
-    # Finally, we store the original context, questions and answers, the associated lemmas, POS and ENT tags, the start and end points of answer in the context, the position of each lemma in the original context, and many other auxiliary features in separated dataframes for training, validation and test.
     def lemmatized_question(self,data,full_pipe):
         docs = list(data.question.values)
         nlp = spacy.load("en_core_web_sm")
@@ -366,15 +390,32 @@ class NLP_preprocessing:
         del data['remaining_context']
         return data
 
-# comparePhrases prints the result of our preprocessing in the following format
-# - Orignal context witout preprocessing
-# - End char of each lemma
-# - Start char of each lemma
-# - lemmas aligned with the original context
 
-# We also highlight the answer in the original context and the lemmas.
-#Given a dataframe it will print the original phrases and the phrases after preprocessing
-def comparePhrases(self,data):
+def comparePhrases(data):
+    r"""
+    Input
+    ---
+    A dataframe containing preprocessed data
+
+    Output
+    ---
+    Samples from the dataset in the following format:
+    1. Orignal context witout preprocessing
+    2. End char of each lemma
+    3. Start char of each lemma
+    4. lemmas aligned with the original context
+    
+    example::
+        
+        .------------------
+        | Answer_start: 33, Answer: overhead wires, Token_start: 33
+        +-----------------
+        | Most electrification systems use overhead wires, but third rail is an option up to about 1,200 V.
+        |    3               19      27  31       40    46   51    57   62 65 68     75 78 81    87    9395         
+        | 0    5               21      29  33       42     49  53    59   64 67 70     77 80 83    89    95             
+        | most electrification system  use overhead wire   but third rail be an option up to about 1200  v                                                                                          
+        ------------------
+    """
     for index,row in data.iterrows():
         context = row.origin_context
         lemmas = row.lemmas
@@ -420,29 +461,22 @@ def comparePhrases(self,data):
             print('|',slemmas)
             print('------------------')
 
-if __name__ == "__main__":
-    ## 1. Text Preprocessing
-    # For what concerns text preprocessing we first **lowercased** all the words in the dataset.
-    # We also decided to remove **special characters** (i.e., punctuation, emoji, ...) and **extra spaces** from contexts and questions.
-    # However, given the task of retrieving answer from the context, we decided not to remove **stopping words** and **digits**.
-    # Indeed they can be part of the answer and they can also provide to the model useful insights, especially for what regards the questions (e.g., why, where, who, ...).
-    # An important note is that while processing the text we kept track of the indexes of all the characters in the original context
-    # in order to be able to recontruct the predicted answer from the start and end indexes provided as model outputs.
-
-    # To this aim we implemented custom preprocessing functions for each each preprocessing step. The functioning of such functions is resumed in the following example:
-    # ```
-    #            context = Hi. World
-    # remaining_context = [123456789]
-    # ```
-    # If the preprocessing step removes '.' from the context we also remove the index 3 from the remaining_context obtaining
-    # ```
-    #            context = Hi World
-    # remaining_context = [12456789]
-    # ```
-    nlp = English()
+def preprocess_all(print_example:bool = False):
+    """Loads, preprocess and saves the train/test/validation splits of our dataset"""
     tqdm.pandas()
 
-    #create instance of clas
+    train_locs = DataLocations('dataset/train_df.csv', 
+                           'dataset/mid_processed_data_train.csv',
+                           'dataset/train_data_frame_preprocessed.csv', False, True)
+
+    val_locs = DataLocations('dataset/val_df.csv', 
+                            'dataset/mid_processed_data_val.csv',
+                            'dataset/val_data_frame_preprocessed.csv', False, True)
+
+    dev_locs = DataLocations('dataset/dev_df.csv',
+                            'dataset/mid_processed_data_dev.csv',
+                            'dataset/dev_data_frame_preprocessed.csv', True, True)
+
     preprocessor = NLP_preprocessing() 
     
     ### Get lemmas, POS and ENT tags
@@ -473,5 +507,6 @@ if __name__ == "__main__":
     data_test.to_csv(dev_locs.final)
 
     ### An example of preprocessed data
-    comparePhrases(data_train[0:10])
+    if print_example:
+        comparePhrases(data_train[0:10])
 
