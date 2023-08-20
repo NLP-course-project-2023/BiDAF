@@ -41,7 +41,3 @@ The implementation of the evaluation tools and metrics is available in the direc
 ### RESULTS
 
 
-
-
-### ADDITIONAL
-#### Requirements
