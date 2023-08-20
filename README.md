@@ -29,15 +29,15 @@ Then we introduced various enhancements to capture finer-grained linguistic info
 
 The implementation of the different model architectures and associated tools is available in the directory ```src/model```.
 
-#### MODEL EVALUATION 
-After being trained, each model can be used in inference mode and the results can be analysed using either manual inspection or automatic metrics.
-The performance of each model has been evaluated using the tools included in the module ```src/model_evaluation/evaluation_utils.py```. 
-
-This module includes tools to:
+### MODEL EVALUATION 
+The performance of each model has been evaluated using different metrics and tools.
+In particular we 
 - retrieve the raw predictions from a trained model, given as input a pre-defined data loader. The prediction at this stage consists directly in the output of the model, namely the 2 arrays obtained after the log_softmax regarding respectively the start and end position probability of the answer. This function provides also additional information regarding the start and end location of each token at character level on the original context, obtained by mapping the original target start and end location over our tokenization;
 - process predictions to extract from the raw predictions the actual predicted span and retrieve the answers in textual format. The predicted span is defined by the maximum joint probability of the start-end position pair, identified as the answer score. On the other hand, is computed the score of the question to be unanswerable as the difference between the 0-index pair probability and the score of the prediction. In case the answer score is lower than the unanswerable score, then the prediction is "impossible answer" and the possible answer is provided. This logic has been inspired by [[Zhou et al.]](https://web.stanford.edu/class/archive/cs/cs224n/cs224n.1224/reports/default_116657437.pdf);
 - evaluate the models using the official function provided by the challenge;
-- visualize the results with intuitive graphics. 
+- visualize the results with intuitive graphics.
+
+The implementation of the different model architectures and associated tools is available in the directory ```src/model_evaluation/```.
 
 ### RESULTS
 
