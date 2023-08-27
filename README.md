@@ -44,7 +44,7 @@ Then the actual predicted span is extracted from the raw predictions. This inclu
 1.   Process the $\log(p_{\textbf{start}})$ and $\log(p_{\textbf{end}})$ to get the actual probabilities $p_{\textbf{start}}$ and $p_{\textbf{end}})$
 2.   The retrieval of the most probable span over the probabilities.
 
-The 2nd step actually implements the core of the answer retrieval. It takes as input the probability vectors $p_{\textbf{start}}$ and $p_{\textbf{end}})$ and computes the answer span by:
+The 2nd step actually implements the core of the answer retrieval. It takes as input the probability vectors $p_{\textbf{start}}$ and $p_{\textbf{end}}$ and computes the answer span by:
 
 1.   Compute the probability of *impossible answer* as the joint probability $p_{\textbf{start}}0)$ and $p_{\textbf{end}}(0)$ (which is how the model has been trained to encode the impossible answers) and removing those 0-index probabilities from the following evaluations.
 2.   Compute  the joint probability of start-end pairs, resulting in a matrix of dimension (number of context tokens, number of context tokens) in which the $(i, j)$ element is the joint probability 
